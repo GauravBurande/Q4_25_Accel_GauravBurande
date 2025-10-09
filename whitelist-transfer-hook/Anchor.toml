@@ -6,7 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-whitelist_transfer_hook = "DhzyDgCmmQzVC4vEcj2zRGUyN8Mt5JynfdGLKkBcRGaX"
+whitelist_transfer_hook = "2K2xwQpnY2BDnkP8mwVfQnU6j3izv8kX61TMZTpPjubE"
 
 [registry]
 url = "https://api.apr.dev"
@@ -16,4 +16,4 @@ cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
-test = "pnpm run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
+test = "pnpm exec ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"

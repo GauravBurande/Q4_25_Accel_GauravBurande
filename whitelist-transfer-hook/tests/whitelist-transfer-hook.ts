@@ -61,7 +61,7 @@ describe("whitelist-transfer-hook", () => {
     );
 
   const whitelist = anchor.web3.PublicKey.findProgramAddressSync(
-    [Buffer.from("whitelist")],
+    [Buffer.from("whitelist"), provider.publicKey.toBuffer()],
     program.programId
   )[0];
 
@@ -85,6 +85,7 @@ describe("whitelist-transfer-hook", () => {
       .accountsPartial({
         admin: provider.publicKey,
         whitelist,
+        systemProgram: SystemProgram.programId,
       })
       .rpc();
 
@@ -98,6 +99,7 @@ describe("whitelist-transfer-hook", () => {
       .accountsPartial({
         admin: provider.publicKey,
         whitelist,
+        systemProgram: SystemProgram.programId,
       })
       .rpc();
 
