@@ -38,10 +38,7 @@ impl<'info> WhitelistOperations<'info> {
             return  err!(WhitelistError::NotWhitelisted);
         };
 
-        let rent_lamports = **self.whitelist.to_account_info().lamports.borrow();
-        **self.admin.to_account_info().lamports.borrow_mut() += rent_lamports;
-        **self.whitelist.to_account_info().lamports.borrow_mut() -= rent_lamports;
-        self.whitelist.to_account_info().assign(&self.system_program.key());
+        self.whitelist.close(self.admin.to_account_info())?;
 
         Ok(())
     }
