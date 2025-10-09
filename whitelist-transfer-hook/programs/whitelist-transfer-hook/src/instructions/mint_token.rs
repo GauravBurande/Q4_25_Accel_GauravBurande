@@ -33,9 +33,9 @@ pub struct TokenFactory<'info> {
     pub extra_account_meta_list: UncheckedAccount<'info>,
     #[account(
         seeds = [b"whitelist", user.key().as_ref()], 
-        bump
+        bump=whitelist.bump
     )]
-    pub blocklist: Account<'info, Whitelist>,
+    pub whitelist: Account<'info, Whitelist>,
     pub system_program: Program<'info, System>,
     pub token_program: Interface<'info, TokenInterface>,
     pub associated_token_program: Program<'info, AssociatedToken> 
