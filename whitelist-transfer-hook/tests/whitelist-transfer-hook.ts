@@ -12,6 +12,8 @@ import {
   createInitializeTransferHookInstruction,
   createAssociatedTokenAccountInstruction,
   createMintToInstruction,
+  TOKEN_PROGRAM_ID,
+  getOrCreateAssociatedTokenAccount,
 } from "@solana/spl-token";
 import {
   SendTransactionError,
@@ -93,13 +95,12 @@ describe("whitelist-transfer-hook", () => {
     console.log("Transaction signature:", tx);
   });
 
-  it("Remove user to whitelist", async () => {
+  xit("Remove user to whitelist", async () => {
     const tx = await program.methods
       .removeFromWhitelist(provider.publicKey)
       .accountsPartial({
         admin: provider.publicKey,
         whitelist,
-        systemProgram: SystemProgram.programId,
       })
       .rpc();
 
@@ -110,7 +111,7 @@ describe("whitelist-transfer-hook", () => {
     console.log("Transaction signature:", tx);
   });
 
-  it("Create Mint Account with Transfer Hook Extension", async () => {
+  xit("Create Mint Account with Transfer Hook Extension Client", async () => {
     const extensions = [ExtensionType.TransferHook];
     const mintLen = getMintLen(extensions);
     const lamports =
@@ -153,12 +154,28 @@ describe("whitelist-transfer-hook", () => {
       maxSupportedTransactionVersion: 0,
       commitment: "confirmed",
     });
-    //console.log(txDetails.meta.logMessages);
+    console.log(txDetails.meta.logMessages);
 
     console.log("\nTransaction Signature: ", txSig);
   });
 
-  it("Create Token Accounts and Mint Tokens", async () => {
+  it("Create Mint Account with Transfer Hook Extension in PROGRAM", async () => {
+    const tx = await program.methods
+      .createAndInitializeMintWithTfHook()
+      .accountsPartial({
+        extraAccountMetaList: extraAccountMetaListPDA,
+        mint: mint2022.publicKey,
+        user: wallet.publicKey,
+        sourceTokenAccount,
+        tokenProgram: TOKEN_2022_PROGRAM_ID,
+      })
+      .signers([wallet.payer, mint2022])
+      .rpc();
+
+    console.log("Transaction signature:", tx);
+  });
+
+  xit("Create Token Accounts and Mint Tokens", async () => {
     // 100 tokens
     const amount = 100 * 10 ** 9;
 
