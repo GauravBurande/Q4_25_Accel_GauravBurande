@@ -28,27 +28,45 @@ mod tests {
         std::{path::PathBuf, str::FromStr},
     };
 
+    pub struct EscrowTestEnvironment {
+        pub program: LiteSVM,
+        pub maker: Keypair,
+        pub taker: Keypair,
+        pub mint_b: Pubkey,
+        pub mint_a: Pubkey,
+        pub maker_ata_a: Pubkey,
+        pub maker_ata_b: Pubkey,
+        pub taker_ata_a: Pubkey,
+        pub taker_ata_b: Pubkey,
+        pub escrow: Pubkey,
+        pub vault: Pubkey,
+    }
+
     static PROGRAM_ID: Pubkey = crate::ID;
 
-    fn setup() -> (LiteSVM, Keypair) {
-        // Initialize LiteSVM and payer
+    fn setup() -> EscrowTestEnvironment {
+        // Initialize LiteSVM and maker
         let mut program = LiteSVM::new();
-        let payer = Keypair::new();
+        let maker = Keypair::new();
+        let taker = Keypair::new();
 
-        // Airdrop some SOL to the payer keypair
+        // Airdrop some SOL to the maker keypair
         program
-            .airdrop(&payer.pubkey(), 10 * LAMPORTS_PER_SOL)
-            .expect("Failed to airdrop SOL to payer");
+            .airdrop(&maker.pubkey(), 10 * LAMPORTS_PER_SOL)
+            .expect("Failed to airdrop SOL to maker");
+
+        // Airdrop some SOL to the taker keypair
+        program
+            .airdrop(&taker.pubkey(), 10 * LAMPORTS_PER_SOL)
+            .expect("Failed to airdrop SOL to taker");
 
         // Load program SO file
         let so_path =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/deploy/anchor_escrow.so");
-
         let program_data = std::fs::read(so_path).expect("Failed to read program SO file");
-
         program.add_program(PROGRAM_ID, &program_data);
 
-        // Example on how to Load an account from devnet
+        // Example: Load an account from devnet
         let rpc_client = RpcClient::new("https://api.devnet.solana.com");
         let account_address =
             Address::from_str("DRYvf71cbF2s5wgaJQvAGkghMkRcp5arvsK2w97vXhi2").unwrap();
@@ -56,9 +74,10 @@ mod tests {
             .get_account(&account_address)
             .expect("Failed to fetch account from devnet");
 
+        // this was fucking up the sol amount in maker, if this is not there, we don't have to airdrop sol to the escrow pda at line 144
         program
             .set_account(
-                payer.pubkey(),
+                maker.pubkey(),
                 Account {
                     lamports: fetched_account.lamports,
                     data: fetched_account.data,
@@ -71,51 +90,96 @@ mod tests {
 
         msg!("Lamports of fetched account: {}", fetched_account.lamports);
 
-        // Return the LiteSVM instance and payer keypair
-        (program, payer)
-    }
-
-    #[test]
-    fn test_make() {
-        // Setup the test environment by initializing LiteSVM and creating a payer keypair
-        let (mut program, payer) = setup();
-
-        // Get the maker's public key from the payer keypair
-        let maker = payer.pubkey();
-
-        // Create two mints (Mint A and Mint B) with 6 decimal places and the maker as the authority
-        let mint_a = CreateMint::new(&mut program, &payer)
+        // Create two mints (Mint A and Mint B) with 6 decimals and maker as authority
+        let mint_a = CreateMint::new(&mut program, &maker)
             .decimals(6)
-            .authority(&maker)
+            .authority(&maker.pubkey())
             .send()
             .unwrap();
         msg!("Mint A: {}\n", mint_a);
 
-        let mint_b = CreateMint::new(&mut program, &payer)
+        let mint_b = CreateMint::new(&mut program, &maker)
             .decimals(6)
-            .authority(&maker)
+            .authority(&maker.pubkey())
             .send()
             .unwrap();
         msg!("Mint B: {}\n", mint_b);
 
-        // Create the maker's associated token account for Mint A
-        let maker_ata_a = CreateAssociatedTokenAccount::new(&mut program, &payer, &mint_a)
-            .owner(&maker)
+        // Create maker’s ATAs
+        let maker_ata_a = CreateAssociatedTokenAccount::new(&mut program, &maker, &mint_a)
+            .owner(&maker.pubkey())
             .send()
             .unwrap();
         msg!("Maker ATA A: {}\n", maker_ata_a);
 
-        // Derive the PDA for the escrow account using the maker's public key and a seed value
+        let maker_ata_b = CreateAssociatedTokenAccount::new(&mut program, &maker, &mint_b)
+            .owner(&maker.pubkey())
+            .send()
+            .unwrap();
+        msg!("Maker ATA B: {}\n", maker_ata_b);
+
+        // Create taker’s ATAs
+        let taker_ata_a = CreateAssociatedTokenAccount::new(&mut program, &taker, &mint_a)
+            .owner(&taker.pubkey())
+            .send()
+            .unwrap();
+        msg!("Taker ATA A: {}\n", taker_ata_a);
+
+        let taker_ata_b = CreateAssociatedTokenAccount::new(&mut program, &taker, &mint_b)
+            .owner(&taker.pubkey())
+            .send()
+            .unwrap();
+        msg!("Taker ATA B: {}\n", taker_ata_b);
+
+        // Derive PDA for escrow account using maker pubkey and seed
         let escrow = Pubkey::find_program_address(
-            &[b"escrow", maker.as_ref(), &123u64.to_le_bytes()],
+            &[b"escrow", maker.pubkey().as_ref(), &123u64.to_le_bytes()],
             &PROGRAM_ID,
         )
         .0;
         msg!("Escrow PDA: {}\n", escrow);
 
-        // Derive the PDA for the vault associated token account using the escrow PDA and Mint A
+        // todo: weird  behavior, escrow doesn't have enough sol to let the vault create, why does this happen?
+        // program
+        //     .airdrop(&escrow, 2 * LAMPORTS_PER_SOL)
+        //     .expect("Failed to airdrop 2sol on escrow");
+
+        // Derive PDA for the vault ATA using escrow PDA and Mint A
         let vault = associated_token::get_associated_token_address(&escrow, &mint_a);
         msg!("Vault PDA: {}\n", vault);
+
+        // Return the test environment
+        EscrowTestEnvironment {
+            program,
+            maker,
+            taker,
+            mint_a,
+            mint_b,
+            maker_ata_a,
+            maker_ata_b,
+            taker_ata_a,
+            taker_ata_b,
+            escrow,
+            vault,
+        }
+    }
+
+    #[test]
+    fn test_make() {
+        // Setup the test environment by initializing LiteSVM and creating a payer keypair
+        let EscrowTestEnvironment {
+            mut program,
+            maker,
+            taker,
+            mint_a,
+            mint_b,
+            maker_ata_a,
+            maker_ata_b,
+            taker_ata_a,
+            taker_ata_b,
+            escrow,
+            vault,
+        } = setup();
 
         // Define program IDs for associated token program, token program, and system program
         let asspciated_token_program = spl_associated_token_account::ID;
@@ -123,7 +187,7 @@ mod tests {
         let system_program = SYSTEM_PROGRAM_ID;
 
         // Mint 1,000 tokens (with 6 decimal places) of Mint A to the maker's associated token account
-        MintTo::new(&mut program, &payer, &mint_a, &maker_ata_a, 1000000000)
+        MintTo::new(&mut program, &maker, &mint_a, &maker_ata_a, 1000000000)
             .send()
             .unwrap();
 
@@ -131,7 +195,7 @@ mod tests {
         let make_ix = Instruction {
             program_id: PROGRAM_ID,
             accounts: crate::accounts::Make {
-                maker: maker,
+                maker: maker.pubkey(),
                 mint_a: mint_a,
                 mint_b: mint_b,
                 maker_ata_a: maker_ata_a,
@@ -151,10 +215,10 @@ mod tests {
         };
 
         // Create and send the transaction containing the "Make" instruction
-        let message = Message::new(&[make_ix], Some(&payer.pubkey()));
+        let message = Message::new(&[make_ix], Some(&maker.pubkey()));
         let recent_blockhash = program.latest_blockhash();
 
-        let transaction = Transaction::new(&[&payer], message, recent_blockhash);
+        let transaction = Transaction::new(&[&maker], message, recent_blockhash);
 
         // Send the transaction and capture the result
         let tx = program.send_transaction(transaction).unwrap();
@@ -175,7 +239,7 @@ mod tests {
         let escrow_data =
             crate::state::Escrow::try_deserialize(&mut escrow_account.data.as_ref()).unwrap();
         assert_eq!(escrow_data.seed, 123u64);
-        assert_eq!(escrow_data.maker, maker);
+        assert_eq!(escrow_data.maker, maker.pubkey());
         assert_eq!(escrow_data.mint_a, mint_a);
         assert_eq!(escrow_data.mint_b, mint_b);
         assert_eq!(escrow_data.receive, 10);
