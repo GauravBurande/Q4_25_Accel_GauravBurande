@@ -75,18 +75,18 @@ mod tests {
             .expect("Failed to fetch account from devnet");
 
         // this was fucking up the sol amount in maker, if this is not there, we don't have to airdrop sol to the escrow pda at line 144
-        program
-            .set_account(
-                maker.pubkey(),
-                Account {
-                    lamports: fetched_account.lamports,
-                    data: fetched_account.data,
-                    owner: Pubkey::from(fetched_account.owner.to_bytes()),
-                    executable: fetched_account.executable,
-                    rent_epoch: fetched_account.rent_epoch,
-                },
-            )
-            .unwrap();
+        // program
+        //     .set_account(
+        //         maker.pubkey(),
+        //         Account {
+        //             lamports: fetched_account.lamports,
+        //             data: fetched_account.data,
+        //             owner: Pubkey::from(fetched_account.owner.to_bytes()),
+        //             executable: fetched_account.executable,
+        //             rent_epoch: fetched_account.rent_epoch,
+        //         },
+        //     )
+        //     .unwrap();
 
         msg!("Lamports of fetched account: {}", fetched_account.lamports);
 
