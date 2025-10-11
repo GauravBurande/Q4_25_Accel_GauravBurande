@@ -1,6 +1,13 @@
 use anchor_lang::prelude::*;
-use anchor_spl::{associated_token::AssociatedToken, token_interface::{Mint, TokenAccount, TokenInterface, TransferChecked, transfer_checked, CloseAccount, close_account}};
+use anchor_spl::{
+    associated_token::AssociatedToken,
+    token_interface::{
+        close_account, transfer_checked, CloseAccount, Mint, TokenAccount, TokenInterface,
+        TransferChecked,
+    },
+};
 
+use crate::error::EscrowError;
 use crate::state::Escrow;
 
 //Create context
@@ -59,6 +66,12 @@ pub struct Take<'info> {
 impl<'info> Take<'info> {
     pub fn deposit(&mut self) -> Result<()> {
         let cpi_program = self.token_program.to_account_info();
+        let current_slot = Clock::get()?.slot;
+        let freeze_period_ends_at = self.escrow.created_at + self.escrow.freeze_period as u64;
+        require!(
+            current_slot >= freeze_period_ends_at,
+            EscrowError::FreezePeriodNotOver
+        );
 
         let cpi_accounts = TransferChecked {
             from: self.taker_ata_b.to_account_info(),
@@ -77,7 +90,7 @@ impl<'info> Take<'info> {
             b"escrow",
             self.maker.key.as_ref(),
             &self.escrow.seed.to_le_bytes()[..],
-            &[self.escrow.bump]
+            &[self.escrow.bump],
         ]];
 
         let cpi_program = self.token_program.to_account_info();
