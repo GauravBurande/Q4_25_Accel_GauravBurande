@@ -3,7 +3,7 @@ mod tests {
     use {
         anchor_lang::{
             prelude::{msg, Clock},
-            solana_program::{example_mocks::solana_sdk::transaction, program_pack::Pack},
+            solana_program::program_pack::Pack,
             AccountDeserialize, InstructionData, ToAccountMetas,
         },
         anchor_spl::{
@@ -14,18 +14,15 @@ mod tests {
         litesvm_token::{
             spl_token::ID as TOKEN_PROGRAM_ID, CreateAssociatedTokenAccount, CreateMint, MintTo,
         },
-        solana_account::ReadableAccount,
-        solana_address::Address,
         solana_instruction::Instruction,
         solana_keypair::Keypair,
         solana_message::Message,
         solana_native_token::LAMPORTS_PER_SOL,
         solana_pubkey::Pubkey,
-        solana_rpc_client::rpc_client::RpcClient,
         solana_sdk_ids::system_program::ID as SYSTEM_PROGRAM_ID,
         solana_signer::Signer,
         solana_transaction::Transaction,
-        std::{path::PathBuf, str::FromStr},
+        std::path::PathBuf,
     };
     pub struct EscrowTestEnvironment {
         pub program: LiteSVM,
@@ -215,13 +212,13 @@ mod tests {
         let EscrowTestEnvironment {
             mut program,
             maker,
-            taker,
+            taker: _,
             mint_a,
             mint_b,
             maker_ata_a,
-            maker_ata_b,
-            taker_ata_a,
-            taker_ata_b,
+            maker_ata_b: _,
+            taker_ata_a: _,
+            taker_ata_b: _,
             escrow,
             vault,
         } = setup();
@@ -272,13 +269,13 @@ mod tests {
         let EscrowTestEnvironment {
             mut program,
             maker,
-            taker,
+            taker: _,
             mint_a,
             mint_b,
             maker_ata_a,
-            maker_ata_b,
-            taker_ata_a,
-            taker_ata_b,
+            maker_ata_b: _,
+            taker_ata_a: _,
+            taker_ata_b: _,
             escrow,
             vault,
         } = setup();
@@ -316,7 +313,7 @@ mod tests {
         let transaction1 = Transaction::new(&[&maker], make_message, recent_blockhash);
 
         // Send the transaction and capture the result
-        let tx1 = program.send_transaction(transaction1).unwrap();
+        let _tx1 = program.send_transaction(transaction1).unwrap();
 
         // Create and send the transaction containing the "Refund" instruction
         let refund_message = Message::new(&[refund_ix], Some(&maker.pubkey()));
@@ -381,7 +378,7 @@ mod tests {
         let recent_blockhash = program.latest_blockhash();
 
         let transaction1 = Transaction::new(&[&maker], make_message, recent_blockhash);
-        let tx1 = program.send_transaction(transaction1).unwrap();
+        let _tx1 = program.send_transaction(transaction1).unwrap();
 
         MintTo::new(&mut program, &maker, &mint_b, &taker_ata_b, 1000000000)
             .send()
