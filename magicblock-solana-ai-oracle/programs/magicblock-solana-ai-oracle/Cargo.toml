@@ -1,0 +1,25 @@
+cargo-features = ["edition2024"]
+
+[package]
+name = "magicblock-solana-ai-oracle"
+version = "0.1.0"
+description = "Created with Anchor"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "magicblock_solana_ai_oracle"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build"]
+
+
+[dependencies]
+anchor-lang = {version = "0.31.1", features = ["init-if-needed"]}
+solana-gpt-oracle = "0.1.1"
+
