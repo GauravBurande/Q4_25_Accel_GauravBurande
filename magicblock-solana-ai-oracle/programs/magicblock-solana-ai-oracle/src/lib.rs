@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use solana_gpt_oracle::{ContextAccount, Counter, Identity};
 
-declare_id!("GJnf16iSAZ9wC2dvHKn681iw2VGdwNLyG5shyJ29hWai");
+declare_id!("2cUo1HiLi1Hg4wj8Q12QjsTqYKeJDKaFR2XHFFHu24Pp");
 
 #[program]
 pub mod magicblock_solana_ai_oracle {
@@ -44,7 +44,7 @@ pub mod magicblock_solana_ai_oracle {
             .expect("Discriminator must be 8 bytes");
 
         solana_gpt_oracle::solana_gpt_oracle::interact_with_llm(
-            cpi_ctx, text, ID, DISCRIMINA, None,
+            cpi_ctx, text, ID, DISCRIMINA, None, // add the metas for user and the score_pda
         )?;
         Ok(())
     }

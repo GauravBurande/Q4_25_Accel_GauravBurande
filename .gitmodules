@@ -1,0 +1,3 @@
+[submodule "vault-with-transfer-hook"]
+	path = vault-with-transfer-hook
+	url = https://github.com/GauravBurande/vault-with-transfer-hook.git

@@ -4,13 +4,9 @@ import { MagicblockSolanaAiOracle } from "../target/types/magicblock_solana_ai_o
 
 describe("magicblock-solana-ai-oracle", () => {
   // Configure the client to use the local cluster.
-  const provider = anchor.getProvider();
-  anchor.setProvider(provider);
+  anchor.setProvider(anchor.AnchorProvider.env());
 
-  const program = anchor.workspace
-    .magicblockSolanaAiOracle as Program<MagicblockSolanaAiOracle>;
-
-  const PROGRAM_ID = program.programId;
+  const program = anchor.workspace.magicblockSolanaAiOracle as Program<MagicblockSolanaAiOracle>;
 
   it("Is initialized!", async () => {
     // Add your test here.
