@@ -5,14 +5,14 @@ package_manager = "pnpm"
 resolution = true
 skip-lint = false
 
-[programs.localnet]
+[programs.devnet]
 magicblock_solana_ai_oracle = "2cUo1HiLi1Hg4wj8Q12QjsTqYKeJDKaFR2XHFFHu24Pp"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "localnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

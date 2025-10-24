@@ -1,12 +1,12 @@
 [package]
-name = "magicblock-solana-ai-oracle"
+name = "er-state-account"
 version = "0.1.0"
 description = "Created with Anchor"
 edition = "2021"
 
 [lib]
 crate-type = ["cdylib", "lib"]
-name = "magicblock_solana_ai_oracle"
+name = "er_state_account"
 
 [features]
 default = []
@@ -16,8 +16,7 @@ no-idl = []
 no-log-ix-name = []
 idl-build = ["anchor-lang/idl-build"]
 
-
 [dependencies]
-anchor-lang = {version =  "0.31.1", features = ["init-if-needed"]}
-solana-gpt-oracle = "0.1.1"
-
+anchor-lang = { version = "0.31.1", features = ["init-if-needed"] }
+ephemeral-rollups-sdk = { version = "0.2.12", features = ["anchor"] }
+solana-gpt-oracle = {version = "0.1.1", features = ["cpi"]}
