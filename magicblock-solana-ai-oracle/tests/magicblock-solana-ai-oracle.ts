@@ -81,7 +81,7 @@ describe("magicblock-solana-ai-oracle", () => {
         Twitter context:\n\"${twitter_context}\"\n\n\
         Only return the score. Do not provide explanations, text, or any extra information.`;
     const tx = await program.methods
-      .interactAgent("")
+      .interactAgent(prompt)
       .accounts({
         interaction: interactionAddress,
         contextAccount: agent.context,
