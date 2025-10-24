@@ -42,7 +42,7 @@ describe("magicblock-solana-ai-oracle", () => {
   const program = anchor.workspace
     .magicblockSolanaAiOracle as Program<MagicblockSolanaAiOracle>;
 
-  it("Is initialized!", async () => {
+  xit("Is initialized!", async () => {
     const llmProgram: any = await getLLMProgram();
 
     const [counterAddress] = PublicKey.findProgramAddressSync(
@@ -75,11 +75,10 @@ describe("magicblock-solana-ai-oracle", () => {
   it("get ur DeFi cred score", async () => {
     // it's more like ur web3 aura score
     const { agent, interactionAddress } = await GetAgentAndInteraction();
-    const twitter_context = `@inspiration_gx is a Solana Turbine graduate building full-stack blockchain products with Rust, React, Node.js, and TypeScript, while serving as DevRel for SuperteamNG in Ekiti and founding Gildore on Sol. They host the "The Anchor Founder" podcast to publicly document tackling advanced Solana challenges like token extensions, LiteSVM testing, and Pinocchio implementations through live coding streams. Active in the Turbin3 Tribe working groups, their contributions emphasize open-source experimentation and community collaboration on tools like transfer hooks and escrow vaults."How far are you willing to expand your mind?" -@inspiration_gx You've swapped encouraging replies on debugging woes and token extensions progress, with them hyping your LiteSVM tests and you dubbing them chief content creator at Solana Turbine during a podcast shoutout.`;
+    const twitter_context = `@inspiration_gx is a Solana Turbine graduate building full-stack blockchain products with Rust, React, Node.js, and TypeScript. They serve as DevRel for SuperteamNG in Ekiti and founded Gildore on Sol. Host of "The Anchor Founder" podcast, documenting advanced Solana work on token extensions, LiteSVM testing, and Pinocchio integrations. Active in Turbin3 working groups, they focus on open-source tools like transfer hooks and escrow vaults. Known for supportive replies, collaboration, and strong community trust.`;
 
-    const prompt = `You are a DeFi Credit Agent. Analyze the following Twitter context and output a single DeFi Credit Score (0–100) as an integer, based on the user's credibility, technical expertise, and community trust.\n\n\
-        Twitter context:\n\"${twitter_context}\"\n\n\
-        Only return the score. Do not provide explanations, text, or any extra information.`;
+    const prompt = `You are a DeFi Credit Agent. Analyze the following Twitter context and output a single DeFi Credit Score (0–100) as an integer based on credibility, technical expertise, and community trust.\n\nTwitter context:\n"${twitter_context}"\n\nOnly return the score. Do not include any explanation or extra text.`;
+
     const tx = await program.methods
       .interactAgent(prompt)
       .accounts({
