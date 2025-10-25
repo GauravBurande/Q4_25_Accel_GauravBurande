@@ -50,7 +50,22 @@ pub mod magicblock_solana_ai_oracle {
             .expect("Discriminator must be 8 bytes");
 
         interact_with_llm(
-            cpi_ctx, text, ID, disc, None, // add the metas for user and the score_pda
+            cpi_ctx,
+            text,
+            ID,
+            disc,
+            Some(vec![
+                solana_gpt_oracle::AccountMeta {
+                    pubkey: ctx.accounts.user.to_account_info().key(),
+                    is_signer: true,
+                    is_writable: false,
+                },
+                solana_gpt_oracle::AccountMeta {
+                    pubkey: ctx.accounts.cred_score.to_account_info().key(),
+                    is_signer: false,
+                    is_writable: true,
+                },
+            ]),
         )?;
         Ok(())
     }
