@@ -21,7 +21,7 @@ pub fn process_make_instruction(accounts: &[AccountInfo], data: &[u8]) -> Progra
     };
 
     {
-        let maker_ata_state = pinocchio_token::state::TokenAccount::from_account_info(&maker_ata)?;
+        let maker_ata_state = pinocchio_token::state::TokenAccount::from_account_info(maker_ata)?;
         if maker_ata_state.owner() != maker.key() {
             return Err(pinocchio::program_error::ProgramError::IllegalOwner);
         }
@@ -51,16 +51,14 @@ pub fn process_make_instruction(accounts: &[AccountInfo], data: &[u8]) -> Progra
     let seeds = Signer::from(&seed);
 
     if escrow_account.owner() != &crate::ID {
-        {
-            CreateAccount {
-                from: maker,
-                to: escrow_account,
-                lamports: Rent::get()?.minimum_balance(Escrow::LEN),
-                space: Escrow::LEN as u64,
-                owner: &crate::ID,
-            }
-            .invoke_signed(&[seeds.clone()])?;
+        CreateAccount {
+            from: maker,
+            to: escrow_account,
+            lamports: Rent::get()?.minimum_balance(Escrow::LEN),
+            space: Escrow::LEN as u64,
+            owner: &crate::ID,
         }
+        .invoke_signed(&[seeds.clone()])?;
 
         {
             let escrow_state = Escrow::from_account_info(escrow_account)?;
@@ -76,27 +74,23 @@ pub fn process_make_instruction(accounts: &[AccountInfo], data: &[u8]) -> Progra
         return Err(pinocchio::program_error::ProgramError::IllegalOwner);
     }
 
-    {
-        pinocchio_associated_token_account::instructions::Create {
-            funding_account: maker,
-            account: escrow_ata,
-            wallet: escrow_account,
-            mint: mint_a,
-            token_program: token_program,
-            system_program: system_program,
-        }
-        .invoke()?;
+    pinocchio_associated_token_account::instructions::Create {
+        funding_account: maker,
+        account: escrow_ata,
+        wallet: escrow_account,
+        mint: mint_a,
+        token_program: token_program,
+        system_program: system_program,
     }
+    .invoke()?;
 
-    {
-        pinocchio_token::instructions::Transfer {
-            from: maker_ata,
-            to: escrow_ata,
-            authority: maker,
-            amount: amount_to_give,
-        }
-        .invoke()?;
+    pinocchio_token::instructions::Transfer {
+        from: maker_ata,
+        to: escrow_ata,
+        authority: maker,
+        amount: amount_to_give,
     }
+    .invoke()?;
 
     Ok(())
 }
