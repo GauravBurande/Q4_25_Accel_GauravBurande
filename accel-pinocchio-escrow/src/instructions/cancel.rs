@@ -8,7 +8,7 @@ use pinocchio_pubkey::derive_address;
 use crate::state::Escrow;
 
 pub fn process_cancel_instruction(accounts: &[AccountInfo]) -> ProgramResult {
-    let [maker, mint_a, escrow_account, maker_ata_a, escrow_ata_a, system_program, token_program, _associated_token_program @ ..] =
+    let [maker, mint_a, escrow_account, maker_ata_a, escrow_ata_a, _system_program, _token_program, _associated_token_program @ ..] =
         accounts
     else {
         return Err(pinocchio::program_error::ProgramError::InvalidAccountData);

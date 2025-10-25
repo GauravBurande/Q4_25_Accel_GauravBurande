@@ -289,4 +289,110 @@ mod tests {
         msg!("\n\n Cancel transaction sucessfull");
         msg!("CUs Consumed: {}", tx.compute_units_consumed);
     }
+
+    #[test]
+    pub fn test_take_instruction() {
+        let (
+            mut svm,
+            payer,
+            mint_a,
+            mint_b,
+            maker_ata_a,
+            escrow,
+            vault,
+            associated_token_program,
+            token_program,
+            system_program,
+        ) = setup();
+
+        let program_id = program_id();
+
+        assert_eq!(program_id.to_string(), PROGRAM_ID);
+
+        let taker = Keypair::new();
+        svm.airdrop(&taker.pubkey(), 10 * LAMPORTS_PER_SOL)
+            .expect("Taker airdrop Failed");
+
+        let taker_ata_a = CreateAssociatedTokenAccount::new(&mut svm, &taker, &mint_a)
+            .owner(&taker.pubkey())
+            .send()
+            .expect("Failed to create taker ata a");
+
+        let taker_ata_b = CreateAssociatedTokenAccount::new(&mut svm, &payer, &mint_b)
+            .owner(&taker.pubkey())
+            .send()
+            .expect("Failed to create taker ata b");
+
+        let maker_ata_b = CreateAssociatedTokenAccount::new(&mut svm, &payer, &mint_b)
+            .owner(&payer.pubkey())
+            .send()
+            .expect("Failed to create maker ata b");
+
+        // Mint 1,000 tokens (with 6 decimal places) of Mint A to the maker's associated token account
+        MintTo::new(&mut svm, &payer, &mint_a, &maker_ata_a, 1000000000)
+            .send()
+            .unwrap();
+
+        MintTo::new(&mut svm, &payer, &mint_b, &taker_ata_b, 1000000000)
+            .send()
+            .expect("Failed to mintb to taker");
+
+        let (escrow_pda, bump) = Pubkey::find_program_address(
+            &[b"escrow".as_ref(), payer.pubkey().as_ref()],
+            &PROGRAM_ID.parse().unwrap(),
+        );
+        msg!("Escrow PDA: {}\n", escrow);
+
+        msg!("Bump: {}", bump);
+
+        let transaction1 = build_make_instruction(
+            &svm,
+            &payer,
+            bump,
+            mint_a,
+            mint_b,
+            escrow_pda,
+            maker_ata_a,
+            vault,
+            system_program,
+            token_program,
+            associated_token_program,
+        );
+
+        // Send the transaction and capture the result
+        let _tx1 = svm.send_transaction(transaction1).unwrap();
+
+        let take_ix = Instruction {
+            program_id,
+            accounts: vec![
+                AccountMeta::new(taker.pubkey(), true),
+                AccountMeta::new(payer.pubkey(), false),
+                AccountMeta::new(mint_a, false),
+                AccountMeta::new(mint_b, false),
+                AccountMeta::new(escrow, false),
+                AccountMeta::new(vault, false),
+                AccountMeta::new(taker_ata_a, false),
+                AccountMeta::new(taker_ata_b, false),
+                AccountMeta::new(maker_ata_b, false),
+                AccountMeta::new_readonly(system_program, false),
+                AccountMeta::new_readonly(token_program, false),
+                AccountMeta::new_readonly(associated_token_program, false),
+                AccountMeta::new_readonly(Rent::id(), false),
+            ],
+            data: vec![1u8],
+        };
+
+        let message = Message::new(&[take_ix], Some(&taker.pubkey()));
+        let recent_blockhash = svm.latest_blockhash();
+
+        let transaction = Transaction::new(&[&taker], message, recent_blockhash);
+
+        let tx = svm
+            .send_transaction(transaction)
+            .expect("Failed to send take txn");
+
+        // Log transaction details
+        msg!("\n\n Take transaction sucessfull");
+        msg!("CUs Consumed: {}", tx.compute_units_consumed);
+    }
 }

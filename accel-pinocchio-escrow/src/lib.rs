@@ -1,6 +1,6 @@
 use pinocchio::{account_info::AccountInfo, entrypoint, pubkey::Pubkey, ProgramResult};
 
-use crate::instructions::EscrowInstrctions;
+use crate::instructions::EscrowInstructions;
 
 mod instructions;
 mod state;
@@ -21,9 +21,10 @@ pub fn process_instruction(
         .split_first()
         .ok_or(pinocchio::program_error::ProgramError::InvalidInstructionData)?;
 
-    match EscrowInstrctions::try_from(discriminator)? {
-        EscrowInstrctions::Make => instructions::process_make_instruction(accounts, data)?,
-        EscrowInstrctions::Cancel => instructions::process_cancel_instruction(accounts)?,
+    match EscrowInstructions::try_from(discriminator)? {
+        EscrowInstructions::Make => instructions::process_make_instruction(accounts, data)?,
+        EscrowInstructions::Cancel => instructions::process_cancel_instruction(accounts)?,
+        EscrowInstructions::Take => instructions::process_take_instruction(accounts)?,
         _ => return Err(pinocchio::program_error::ProgramError::InvalidInstructionData),
     }
     Ok(())
