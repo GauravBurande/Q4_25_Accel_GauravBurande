@@ -32,7 +32,6 @@ pub fn process_make_instruction(accounts: &[AccountInfo], data: &[u8]) -> Progra
 
     let bump = data[0];
     let seed = [b"escrow".as_ref(), maker.key().as_slice(), &[bump]];
-    let seeds = &seed[..];
 
     let escrow_account_pda = derive_address(&seed, None, &crate::ID);
     log(&escrow_account_pda);
@@ -58,7 +57,7 @@ pub fn process_make_instruction(accounts: &[AccountInfo], data: &[u8]) -> Progra
             space: Escrow::LEN as u64,
             owner: &crate::ID,
         }
-        .invoke_signed(&[seeds.clone()])?;
+        .invoke_signed(&[seeds])?;
 
         {
             let escrow_state = Escrow::from_account_info(escrow_account)?;

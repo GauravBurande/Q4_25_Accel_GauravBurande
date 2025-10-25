@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
 
-    use std::path::PathBuf;
+    use std::{path::PathBuf, vec};
 
     use litesvm::LiteSVM;
     use litesvm_token::{
@@ -28,7 +28,18 @@ mod tests {
         Pubkey::from(crate::ID)
     }
 
-    fn setup() -> (LiteSVM, Keypair) {
+    fn setup() -> (
+        LiteSVM,
+        Keypair,
+        Pubkey,
+        Pubkey,
+        Pubkey,
+        Pubkey,
+        Pubkey,
+        Pubkey,
+        Pubkey,
+        Pubkey,
+    ) {
         let mut svm = LiteSVM::new();
         let payer = Keypair::new();
 
@@ -43,17 +54,7 @@ mod tests {
 
         svm.add_program(program_id(), &program_data);
 
-        (svm, payer)
-    }
-
-    #[test]
-    pub fn test_make_instruction() {
-        let (mut svm, payer) = setup();
-
-        let program_id = program_id();
-
-        assert_eq!(program_id.to_string(), PROGRAM_ID);
-
+        // Create mints
         let mint_a = CreateMint::new(&mut svm, &payer)
             .decimals(6)
             .authority(&payer.pubkey())
@@ -68,79 +69,224 @@ mod tests {
             .unwrap();
         msg!("Mint B: {}", mint_b);
 
-        // Create the maker's associated token account for Mint A
+        // Create maker ATA for Mint A
         let maker_ata_a = CreateAssociatedTokenAccount::new(&mut svm, &payer, &mint_a)
             .owner(&payer.pubkey())
             .send()
             .unwrap();
         msg!("Maker ATA A: {}\n", maker_ata_a);
 
-        // Derive the PDA for the escrow account using the maker's public key and a seed value
-        let escrow = Pubkey::find_program_address(
+        // Derive escrow PDA
+        let (escrow, _) = Pubkey::find_program_address(
             &[b"escrow".as_ref(), payer.pubkey().as_ref()],
             &PROGRAM_ID.parse().unwrap(),
         );
-        msg!("Escrow PDA: {}\n", escrow.0);
+        msg!("Escrow PDA: {}\n", escrow);
 
-        // Derive the PDA for the vault associated token account using the escrow PDA and Mint A
-        let vault = spl_associated_token_account::get_associated_token_address(
-            &escrow.0, // owner will be the escrow PDA
-            &mint_a,   // mint
-        );
+        // Derive vault PDA (ATA owned by escrow PDA)
+        let vault = spl_associated_token_account::get_associated_token_address(&escrow, &mint_a);
         msg!("Vault PDA: {}\n", vault);
 
         // Define program IDs for associated token program, token program, and system program
-        let asspciated_token_program = ASSOCIATED_TOKEN_PROGRAM_ID.parse::<Pubkey>().unwrap();
+        let associated_token_program = ASSOCIATED_TOKEN_PROGRAM_ID.parse::<Pubkey>().unwrap();
         let token_program = TOKEN_PROGRAM_ID;
         let system_program = solana_sdk_ids::system_program::ID;
+
+        // Return all important addresses
+        (
+            svm,
+            payer,
+            mint_a,
+            mint_b,
+            maker_ata_a,
+            escrow,
+            vault,
+            associated_token_program,
+            token_program,
+            system_program,
+        )
+    }
+
+    fn build_make_instruction(
+        svm: &LiteSVM, // pass by ref — no need to move svm
+        payer: &Keypair,
+        bump: u8,
+        mint_a: Pubkey,
+        mint_b: Pubkey,
+        escrow: Pubkey,
+        maker_ata_a: Pubkey,
+        vault: Pubkey,
+        system_program: Pubkey,
+        token_program: Pubkey,
+        associated_token_program: Pubkey,
+    ) -> Transaction {
+        let program_id = program_id(); // assuming you're in an Anchor context
+
+        let amount_to_receive: u64 = 100000000; // 100 tokens with 6 decimal places
+        let amount_to_give: u64 = 500000000; // 500 tokens with 6 decimal places
+
+        // Instruction data layout:
+        // [ discriminator (u8) | bump (u8) | amount_to_receive (u64) | amount_to_give (u64) ]
+        let make_data = [
+            vec![0u8], // discriminator for "Make"
+            bump.to_le_bytes().to_vec(),
+            amount_to_receive.to_le_bytes().to_vec(),
+            amount_to_give.to_le_bytes().to_vec(),
+        ]
+        .concat();
+
+        let make_ix = Instruction {
+            program_id,
+            accounts: vec![
+                AccountMeta::new(payer.pubkey(), true),
+                AccountMeta::new_readonly(mint_a, false),
+                AccountMeta::new_readonly(mint_b, false),
+                AccountMeta::new(escrow, false),
+                AccountMeta::new(maker_ata_a, false),
+                AccountMeta::new(vault, false),
+                AccountMeta::new_readonly(system_program, false),
+                AccountMeta::new_readonly(token_program, false),
+                AccountMeta::new_readonly(associated_token_program, false),
+                AccountMeta::new_readonly(Rent::id(), false),
+            ],
+            data: make_data,
+        };
+
+        let message = Message::new(&[make_ix], Some(&payer.pubkey()));
+        let recent_blockhash = svm.latest_blockhash();
+
+        Transaction::new(&[payer], message, recent_blockhash)
+    }
+
+    #[test]
+    pub fn test_make_instruction() {
+        let (
+            mut svm,
+            payer,
+            mint_a,
+            mint_b,
+            maker_ata_a,
+            escrow,
+            vault,
+            associated_token_program,
+            token_program,
+            system_program,
+        ) = setup();
+
+        let program_id = program_id();
+
+        assert_eq!(program_id.to_string(), PROGRAM_ID);
 
         // Mint 1,000 tokens (with 6 decimal places) of Mint A to the maker's associated token account
         MintTo::new(&mut svm, &payer, &mint_a, &maker_ata_a, 1000000000)
             .send()
             .unwrap();
 
-        let amount_to_receive: u64 = 100000000; // 100 tokens with 6 decimal places
-        let amount_to_give: u64 = 500000000; // 500 tokens with 6 decimal places
-        let bump: u8 = escrow.1;
+        let (escrow_pda, bump) = Pubkey::find_program_address(
+            &[b"escrow".as_ref(), payer.pubkey().as_ref()],
+            &PROGRAM_ID.parse().unwrap(),
+        );
+        msg!("Escrow PDA: {}\n", escrow);
 
         msg!("Bump: {}", bump);
 
-        // Create the "Make" instruction to deposit tokens into the escrow
-        let make_data = [
-            vec![0u8], // Discriminator for "Make" instruction
-            bump.to_le_bytes().to_vec(),
-            amount_to_receive.to_le_bytes().to_vec(),
-            amount_to_give.to_le_bytes().to_vec(),
-        ]
-        .concat();
-        let make_ix = Instruction {
-            program_id: program_id,
-            accounts: vec![
-                AccountMeta::new(payer.pubkey(), true),
-                AccountMeta::new(mint_a, false),
-                AccountMeta::new(mint_b, false),
-                AccountMeta::new(escrow.0, false),
-                AccountMeta::new(maker_ata_a, false),
-                AccountMeta::new(vault, false),
-                AccountMeta::new(system_program, false),
-                AccountMeta::new(token_program, false),
-                AccountMeta::new(asspciated_token_program, false),
-                AccountMeta::new(Rent::id(), false),
-            ],
-            data: make_data,
-        };
-
-        // Create and send the transaction containing the "Make" instruction
-        let message = Message::new(&[make_ix], Some(&payer.pubkey()));
-        let recent_blockhash = svm.latest_blockhash();
-
-        let transaction = Transaction::new(&[&payer], message, recent_blockhash);
+        let transaction = build_make_instruction(
+            &svm,
+            &payer,
+            bump,
+            mint_a,
+            mint_b,
+            escrow_pda,
+            maker_ata_a,
+            vault,
+            system_program,
+            token_program,
+            associated_token_program,
+        );
 
         // Send the transaction and capture the result
         let tx = svm.send_transaction(transaction).unwrap();
 
         // Log transaction details
         msg!("\n\nMake transaction sucessfull");
+        msg!("CUs Consumed: {}", tx.compute_units_consumed);
+    }
+
+    #[test]
+    pub fn test_cancel_instruction() {
+        let (
+            mut svm,
+            payer,
+            mint_a,
+            mint_b,
+            maker_ata_a,
+            escrow,
+            vault,
+            associated_token_program,
+            token_program,
+            system_program,
+        ) = setup();
+
+        let program_id = program_id();
+
+        assert_eq!(program_id.to_string(), PROGRAM_ID);
+
+        // Mint 1,000 tokens (with 6 decimal places) of Mint A to the maker's associated token account
+        MintTo::new(&mut svm, &payer, &mint_a, &maker_ata_a, 1000000000)
+            .send()
+            .unwrap();
+
+        let (escrow_pda, bump) = Pubkey::find_program_address(
+            &[b"escrow".as_ref(), payer.pubkey().as_ref()],
+            &PROGRAM_ID.parse().unwrap(),
+        );
+        msg!("Escrow PDA: {}\n", escrow);
+
+        msg!("Bump: {}", bump);
+
+        let transaction1 = build_make_instruction(
+            &svm,
+            &payer,
+            bump,
+            mint_a,
+            mint_b,
+            escrow_pda,
+            maker_ata_a,
+            vault,
+            system_program,
+            token_program,
+            associated_token_program,
+        );
+
+        // Send the transaction and capture the result
+        let _tx1 = svm.send_transaction(transaction1).unwrap();
+
+        let cancel_ix = Instruction {
+            program_id,
+            accounts: vec![
+                AccountMeta::new(payer.pubkey(), true),
+                AccountMeta::new_readonly(mint_a, false),
+                AccountMeta::new(escrow, false),
+                AccountMeta::new(maker_ata_a, false),
+                AccountMeta::new(vault, false),
+                AccountMeta::new_readonly(system_program, false),
+                AccountMeta::new_readonly(token_program, false),
+                AccountMeta::new_readonly(associated_token_program, false),
+            ],
+            data: vec![2u8],
+        };
+
+        let message = Message::new(&[cancel_ix], Some(&payer.pubkey()));
+        let recent_blockhash = svm.latest_blockhash();
+
+        let transaction = Transaction::new(&[&payer], message, recent_blockhash);
+
+        let tx = svm
+            .send_transaction(transaction)
+            .expect("Failed to send cancel txn");
+
+        // Log transaction details
+        msg!("\n\n Cancel transaction sucessfull");
         msg!("CUs Consumed: {}", tx.compute_units_consumed);
     }
 }
