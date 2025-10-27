@@ -65,7 +65,7 @@ pub fn process_contribute(accounts: &[AccountInfo], data: &[u8]) -> ProgramResul
 
     let amount = u64::from_le_bytes(data[1..9].try_into().unwrap());
 
-    if amount < 1_u8.pow(mint_state.decimals() as u32) as u64 {
+    if amount < 1 * 10u8.pow(mint_state.decimals() as u32) as u64 {
         return Err(pinocchio::program_error::ProgramError::InvalidInstructionData);
     }
 
@@ -101,11 +101,6 @@ pub fn process_contribute(accounts: &[AccountInfo], data: &[u8]) -> ProgramResul
             lamports: Rent::get()?.minimum_balance(Contributor::LEN),
         }
         .invoke_signed(&[seeds])?;
-
-        {
-            let contributor_state = Contributor::from_account_info(contributor_pda)?;
-            contributor_state.set_amount(amount);
-        }
     } else {
         return Err(pinocchio::program_error::ProgramError::IllegalOwner);
     }
