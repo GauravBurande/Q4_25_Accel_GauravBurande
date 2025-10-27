@@ -18,7 +18,12 @@ mod tests {
     use solana_pubkey::Pubkey;
     use solana_signer::Signer;
     use solana_transaction::Transaction;
-    use spl_associated_token_account::solana_program::program_pack::Pack;
+    use spl_associated_token_account::{
+        get_associated_token_address,
+        solana_program::{clock::Clock, program_pack::Pack},
+    };
+
+    use crate::constant::SECONDS_TO_DAYS;
 
     const PROGRAM_ID: &str = "BbFoDc7zsPk4QJLQmL6boWhc4HoGWbW8w4PPXGbdNfKL";
     const TOKEN_PROGRAM_ID: Pubkey = spl_token::ID;
@@ -253,6 +258,47 @@ mod tests {
         Transaction::new(&[contributor], message, recent_blockhash)
     }
 
+    pub fn build_collect_transaction(
+        svm: &LiteSVM,
+        maker: &Keypair,
+        mint: Pubkey,
+        maker_ata: Pubkey,
+        vault: Pubkey,
+        program_id: Pubkey,
+        token_program: Pubkey,
+        system_program: Pubkey,
+        associated_token_program: Pubkey,
+    ) -> Transaction {
+        // Derive fundraiser PDA (same seed pattern as process_collect)
+        let (fundraiser_pda, bump) =
+            Pubkey::find_program_address(&[b"fundraiser", maker.pubkey().as_ref()], &program_id);
+
+        // Instruction data layout:
+        // [0] = discriminator (3 for Collect)
+        // [1] = bump (u8)
+        let collect_data = [vec![3u8], vec![bump]].concat();
+
+        // Build the collect instruction
+        let collect_ix = Instruction {
+            program_id,
+            accounts: vec![
+                AccountMeta::new(maker.pubkey(), true),  // maker (signer)
+                AccountMeta::new(maker_ata, false),      // maker's ATA
+                AccountMeta::new_readonly(mint, false),  // mint
+                AccountMeta::new(fundraiser_pda, false), // fundraiser PDA
+                AccountMeta::new(vault, false),          // vault
+                AccountMeta::new_readonly(system_program, false), // system program
+                AccountMeta::new_readonly(token_program, false), // token program
+                AccountMeta::new_readonly(associated_token_program, false), // associated token program
+            ],
+            data: collect_data,
+        };
+
+        let message = Message::new(&[collect_ix], Some(&maker.pubkey()));
+        let recent_blockhash = svm.latest_blockhash();
+        Transaction::new(&[maker], message, recent_blockhash)
+    }
+
     #[test]
     pub fn test_init_instruction() {
         let (
@@ -422,6 +468,138 @@ mod tests {
             .expect("Failed to send refund tx");
 
         msg!("\n\n Refund transaction sucessfull");
+        msg!("Logs: {}", tx.pretty_logs());
+        msg!("CUs Consumed: {}", tx.compute_units_consumed);
+    }
+
+    #[test]
+    pub fn test_collect_instruction() {
+        let (
+            mut svm,
+            payer,
+            mint,
+            contributor_ata,
+            fundraiser,
+            vault,
+            associated_token_program,
+            token_program,
+            system_program,
+        ) = setup();
+
+        let program_id = program_id();
+        let maker_ata = get_associated_token_address(&payer.pubkey(), &mint);
+
+        let transaction1 = build_init_transaction(
+            &svm,
+            &payer,
+            mint,
+            vault,
+            program_id,
+            token_program,
+            system_program,
+            associated_token_program,
+        );
+
+        let _tx1 = svm
+            .send_transaction(transaction1)
+            .expect("Failed to send init tx");
+
+        let amount: u64 = 400_000_000; // just enough
+
+        let transaction2 = build_contribute_transaction(
+            &mut svm,
+            &payer,
+            amount,
+            mint,
+            contributor_ata,
+            fundraiser,
+            vault,
+            program_id,
+            token_program,
+            system_program,
+            associated_token_program,
+        );
+        let _tx2 = svm
+            .send_transaction(transaction2)
+            .expect("Failed to send contribute tx");
+
+        let contributor2 = Keypair::new();
+        let contributor2_ata = CreateAssociatedTokenAccount::new(&mut svm, &payer, &mint)
+            .owner(&contributor2.pubkey())
+            .send()
+            .expect("Failed to create ata for contributor 2!");
+
+        svm.airdrop(&contributor2.pubkey(), 10 * LAMPORTS_PER_SOL)
+            .unwrap();
+
+        MintTo::new(&mut svm, &payer, &mint, &contributor2_ata, amount)
+            .send()
+            .expect("Failed to mint tokens to contributor 2!");
+
+        let (contributor_pda, bump) = Pubkey::find_program_address(
+            &[b"contributor", contributor2.pubkey().as_ref()],
+            &program_id,
+        );
+
+        // Instruction data layout:
+        // [0] = discriminator (1 for contribute)
+        // [1] = bump (u8)
+        // [2..10] = amount (u64, LE)
+        let contribute_data = [
+            vec![1u8],                     // discriminator for "Contribute"
+            vec![bump],                    // bump byte
+            amount.to_le_bytes().to_vec(), // contribution amount
+        ]
+        .concat();
+
+        // Build the contribute instruction
+        let contribute_ix = Instruction {
+            program_id,
+            accounts: vec![
+                AccountMeta::new(contributor2.pubkey(), true), // contributor (signer)
+                AccountMeta::new(contributor2_ata, false),     // contributor's token account
+                AccountMeta::new(contributor_pda, false),      // contributor PDA
+                AccountMeta::new_readonly(mint, false),        // mint
+                AccountMeta::new(fundraiser, false),           // fundraiser state
+                AccountMeta::new(vault, false),                // vault token account
+                AccountMeta::new_readonly(system_program, false), // system program
+                AccountMeta::new_readonly(token_program, false), // token program
+                AccountMeta::new_readonly(associated_token_program, false), // associated token program
+            ],
+            data: contribute_data,
+        };
+
+        let message = Message::new(&[contribute_ix], Some(&contributor2.pubkey()));
+        let recent_blockhash = svm.latest_blockhash();
+        let transaction3 = Transaction::new(&[contributor2], message, recent_blockhash);
+        let _tx3 = svm
+            .send_transaction(transaction3)
+            .expect("Failed to send contribute 2 tx");
+
+        let transaction = build_collect_transaction(
+            &svm,
+            &payer,
+            mint,
+            maker_ata,
+            vault,
+            program_id,
+            token_program,
+            system_program,
+            associated_token_program,
+        );
+
+        // time trave 2 days into future, duration is 1 day
+
+        let clock = svm.get_sysvar::<Clock>();
+        let mut rn = clock.unix_timestamp as u64;
+        let days_later = rn + 2 * SECONDS_TO_DAYS;
+        svm.set_sysvar::<Clock>(&days_later);
+
+        let tx = svm
+            .send_transaction(transaction)
+            .expect("Failed to send collect tx");
+
+        msg!("\n\n Collect transaction sucessfull");
         msg!("Logs: {}", tx.pretty_logs());
         msg!("CUs Consumed: {}", tx.compute_units_consumed);
     }
