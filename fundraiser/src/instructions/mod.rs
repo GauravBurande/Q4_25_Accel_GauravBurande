@@ -1,10 +1,14 @@
 use pinocchio::program_error::ProgramError;
 
+pub mod collect;
 pub mod contribute;
 pub mod initialize;
+pub mod refund;
 
+pub use collect::*;
 pub use contribute::*;
 pub use initialize::*;
+pub use refund::*;
 
 pub enum FundInstructions {
     Initialize = 0,

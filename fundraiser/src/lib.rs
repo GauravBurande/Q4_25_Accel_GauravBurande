@@ -26,6 +26,8 @@ pub fn process_instruction(
     match FundInstructions::try_from(discriminator)? {
         FundInstructions::Initialize => instructions::process_initialize(accounts, data)?,
         FundInstructions::Contribute => instructions::process_contribute(accounts, data)?,
+        FundInstructions::Refund => instructions::process_refund(accounts, data)?,
+        FundInstructions::Collect => instructions::process_collect(accounts, data)?,
         _ => return Err(pinocchio::program_error::ProgramError::InvalidInstructionData),
     }
     Ok(())

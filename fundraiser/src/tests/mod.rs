@@ -18,6 +18,7 @@ mod tests {
     use solana_pubkey::Pubkey;
     use solana_signer::Signer;
     use solana_transaction::Transaction;
+    use spl_associated_token_account::solana_program::program_pack::Pack;
 
     const PROGRAM_ID: &str = "BbFoDc7zsPk4QJLQmL6boWhc4HoGWbW8w4PPXGbdNfKL";
     const TOKEN_PROGRAM_ID: Pubkey = spl_token::ID;
@@ -41,7 +42,7 @@ mod tests {
         let mut svm = LiteSVM::new();
         let payer = Keypair::new();
 
-        svm.airdrop(&payer.pubkey(), 10 * LAMPORTS_PER_SOL)
+        svm.airdrop(&payer.pubkey(), 20 * LAMPORTS_PER_SOL)
             .expect("Airdrop failed");
 
         // Load program SO file
@@ -114,7 +115,8 @@ mod tests {
             &[b"fundraiser".as_ref(), payer.pubkey().as_ref()],
             &PROGRAM_ID.parse().unwrap(),
         );
-        let amount_to_raise: u64 = 600u64.pow(6);
+        let amount_to_raise: u64 = 600 * 10u64.pow(6);
+
         let duration: u8 = 1;
         let init_data = [
             vec![0u8], // discriminator
@@ -163,9 +165,15 @@ mod tests {
             &program_id,
         );
 
-        MintTo::new(&mut svm, contributor, &mint, &contributor_ata, 1000_000_000)
-            .send()
-            .unwrap();
+        MintTo::new(
+            &mut svm,
+            contributor,
+            &mint,
+            &contributor_ata,
+            100000_000_000,
+        )
+        .send()
+        .unwrap();
 
         // Instruction data layout:
         // [0] = discriminator (1 for contribute)
@@ -196,6 +204,51 @@ mod tests {
         };
 
         let message = Message::new(&[contribute_ix], Some(&contributor.pubkey()));
+        let recent_blockhash = svm.latest_blockhash();
+        Transaction::new(&[contributor], message, recent_blockhash)
+    }
+
+    pub fn build_refund_transaction(
+        svm: &LiteSVM,
+        contributor: &Keypair,
+        mint: Pubkey,
+        contributor_ata: Pubkey,
+        fundraiser: Pubkey,
+        vault: Pubkey,
+        program_id: Pubkey,
+        token_program: Pubkey,
+        system_program: Pubkey,
+        associated_token_program: Pubkey,
+    ) -> Transaction {
+        // Derive contributor PDA (same as in process_refund)
+        let (contributor_pda, bump) = Pubkey::find_program_address(
+            &[b"contributor", contributor.pubkey().as_ref()],
+            &program_id,
+        );
+
+        // Instruction data layout:
+        // [0] = discriminator (2 for refund)
+        // [1] = bump (u8)
+        let refund_data = [vec![2u8], vec![bump]].concat();
+
+        // Build the refund instruction
+        let refund_ix = Instruction {
+            program_id,
+            accounts: vec![
+                AccountMeta::new(contributor.pubkey(), true), // contributor (signer)
+                AccountMeta::new(contributor_ata, false),     // contributor's ATA
+                AccountMeta::new(contributor_pda, false),     // contributor PDA
+                AccountMeta::new_readonly(mint, false),       // mint
+                AccountMeta::new(fundraiser, false),          // fundraiser state
+                AccountMeta::new(vault, false),               // vault
+                AccountMeta::new_readonly(system_program, false), // system program
+                AccountMeta::new_readonly(token_program, false), // token program
+                AccountMeta::new_readonly(associated_token_program, false), // associated token program
+            ],
+            data: refund_data,
+        };
+
+        let message = Message::new(&[refund_ix], Some(&contributor.pubkey()));
         let recent_blockhash = svm.latest_blockhash();
         Transaction::new(&[contributor], message, recent_blockhash)
     }
@@ -288,7 +341,87 @@ mod tests {
             .send_transaction(transaction)
             .expect("Failed to send contribute tx");
 
+        let vault_acc = svm.get_account(&vault).unwrap();
+        let vault_data = spl_token::state::Account::unpack(&vault_acc.data).unwrap();
+
+        msg!("Amount in the vault: {}", vault_data.amount);
+        msg!("Amount deposited by contributor: {}", amount);
+        assert_eq!(vault_data.amount, amount);
+
         msg!("\n\n Contribute transaction sucessfull");
+        msg!("Logs: {}", tx.pretty_logs());
+        msg!("CUs Consumed: {}", tx.compute_units_consumed);
+    }
+
+    #[test]
+    pub fn test_refund_instruction() {
+        let (
+            mut svm,
+            payer,
+            mint,
+            contributor_ata,
+            fundraiser,
+            vault,
+            associated_token_program,
+            token_program,
+            system_program,
+        ) = setup();
+
+        let program_id = program_id();
+
+        let transaction1 = build_init_transaction(
+            &svm,
+            &payer,
+            mint,
+            vault,
+            program_id,
+            token_program,
+            system_program,
+            associated_token_program,
+        );
+
+        let _tx1 = svm
+            .send_transaction(transaction1)
+            .expect("Failed to send init tx");
+
+        let amount: u64 = 1_000_000; // just enough
+
+        let transaction2 = build_contribute_transaction(
+            &mut svm,
+            &payer,
+            amount,
+            mint,
+            contributor_ata,
+            fundraiser,
+            vault,
+            program_id,
+            token_program,
+            system_program,
+            associated_token_program,
+        );
+
+        let _tx2 = svm
+            .send_transaction(transaction2)
+            .expect("Failed to send contribute tx");
+
+        let transaction = build_refund_transaction(
+            &svm,
+            &payer,
+            mint,
+            contributor_ata,
+            fundraiser,
+            vault,
+            program_id,
+            token_program,
+            system_program,
+            associated_token_program,
+        );
+
+        let tx = svm
+            .send_transaction(transaction)
+            .expect("Failed to send refund tx");
+
+        msg!("\n\n Refund transaction sucessfull");
         msg!("Logs: {}", tx.pretty_logs());
         msg!("CUs Consumed: {}", tx.compute_units_consumed);
     }
