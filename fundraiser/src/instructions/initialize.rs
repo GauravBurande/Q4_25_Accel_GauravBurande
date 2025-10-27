@@ -29,7 +29,8 @@ pub fn process_initialize(accounts: &[AccountInfo], data: &[u8]) -> ProgramResul
     let duration = data[9];
 
     let mint_state = pinocchio_token::state::Mint::from_account_info(mint)?;
-    if amount < MIN_AMOUNT_TO_RAISE.pow(mint_state.decimals() as u32) {
+
+    if amount < MIN_AMOUNT_TO_RAISE * 10u64.pow(mint_state.decimals() as u32) {
         return Err(pinocchio::program_error::ProgramError::InvalidInstructionData);
     }
 
