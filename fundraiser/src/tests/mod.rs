@@ -9,7 +9,7 @@ mod tests {
             self,
             solana_program::{msg, rent::Rent, sysvar::SysvarId},
         },
-        CreateAssociatedTokenAccount, CreateMint,
+        CreateAssociatedTokenAccount, CreateMint, MintTo,
     };
     use solana_instruction::{AccountMeta, Instruction};
     use solana_keypair::Keypair;
@@ -63,7 +63,7 @@ mod tests {
             .owner(&payer.pubkey())
             .send()
             .unwrap();
-        msg!("Contributor ATA A: {}\n", contributor_ata);
+        msg!("Contributor ATA: {}\n", contributor_ata);
 
         // Derive fundraiser PDA
         let (fundraiser, _) = Pubkey::find_program_address(
@@ -73,8 +73,13 @@ mod tests {
         msg!("Fundraiser PDA: {}\n", fundraiser);
 
         // Derive vault PDA (ATA owned by escrow PDA)
-        let vault = spl_associated_token_account::get_associated_token_address(&fundraiser, &mint);
-        msg!("Vault PDA: {}\n", vault);
+        // let vault = spl_associated_token_account::get_associated_token_address(&fundraiser, &mint);
+        // Create it client side to save on CUs in the program
+        let vault = CreateAssociatedTokenAccount::new(&mut svm, &payer, &mint)
+            .owner(&fundraiser)
+            .send()
+            .unwrap();
+        msg!("Vault ATA: {}\n", vault);
 
         // Define program IDs for associated token program, token program, and system program
         let associated_token_program = ASSOCIATED_TOKEN_PROGRAM_ID.parse::<Pubkey>().unwrap();
@@ -95,24 +100,16 @@ mod tests {
         )
     }
 
-    #[test]
-    pub fn test_init_instruction() {
-        let (
-            mut svm,
-            payer,
-            mint,
-            _contributor_ata,
-            _fundraiser,
-            vault,
-            associated_token_program,
-            token_program,
-            system_program,
-        ) = setup();
-
-        let program_id = program_id();
-
-        assert_eq!(program_id.to_string(), PROGRAM_ID);
-
+    pub fn build_init_transaction(
+        svm: &LiteSVM,
+        payer: &Keypair,
+        mint: Pubkey,
+        vault: Pubkey,
+        program_id: Pubkey,
+        token_program: Pubkey,
+        system_program: Pubkey,
+        associated_token_program: Pubkey,
+    ) -> Transaction {
         let (fundraiser, bump) = Pubkey::find_program_address(
             &[b"fundraiser".as_ref(), payer.pubkey().as_ref()],
             &PROGRAM_ID.parse().unwrap(),
@@ -144,13 +141,154 @@ mod tests {
 
         let message = Message::new(&[init_ix], Some(&payer.pubkey()));
         let recent_blockhash = svm.latest_blockhash();
-        let transaction = Transaction::new(&[payer], message, recent_blockhash);
+        Transaction::new(&[payer], message, recent_blockhash)
+    }
+
+    pub fn build_contribute_transaction(
+        mut svm: &mut LiteSVM,
+        contributor: &Keypair,
+        amount: u64,
+        mint: Pubkey,
+        contributor_ata: Pubkey,
+        fundraiser: Pubkey,
+        vault: Pubkey,
+        program_id: Pubkey,
+        token_program: Pubkey,
+        system_program: Pubkey,
+        associated_token_program: Pubkey,
+    ) -> Transaction {
+        // Derive contributor PDA
+        let (contributor_pda, bump) = Pubkey::find_program_address(
+            &[b"contributor", contributor.pubkey().as_ref()],
+            &program_id,
+        );
+
+        MintTo::new(&mut svm, contributor, &mint, &contributor_ata, 1000_000_000)
+            .send()
+            .unwrap();
+
+        // Instruction data layout:
+        // [0] = discriminator (1 for contribute)
+        // [1] = bump (u8)
+        // [2..10] = amount (u64, LE)
+        let contribute_data = [
+            vec![1u8],                     // discriminator for "Contribute"
+            vec![bump],                    // bump byte
+            amount.to_le_bytes().to_vec(), // contribution amount
+        ]
+        .concat();
+
+        // Build the contribute instruction
+        let contribute_ix = Instruction {
+            program_id,
+            accounts: vec![
+                AccountMeta::new(contributor.pubkey(), true), // contributor (signer)
+                AccountMeta::new(contributor_ata, false),     // contributor's token account
+                AccountMeta::new(contributor_pda, false),     // contributor PDA
+                AccountMeta::new_readonly(mint, false),       // mint
+                AccountMeta::new(fundraiser, false),          // fundraiser state
+                AccountMeta::new(vault, false),               // vault token account
+                AccountMeta::new_readonly(system_program, false), // system program
+                AccountMeta::new_readonly(token_program, false), // token program
+                AccountMeta::new_readonly(associated_token_program, false), // associated token program
+            ],
+            data: contribute_data,
+        };
+
+        let message = Message::new(&[contribute_ix], Some(&contributor.pubkey()));
+        let recent_blockhash = svm.latest_blockhash();
+        Transaction::new(&[contributor], message, recent_blockhash)
+    }
+
+    #[test]
+    pub fn test_init_instruction() {
+        let (
+            mut svm,
+            payer,
+            mint,
+            _contributor_ata,
+            _fundraiser,
+            vault,
+            associated_token_program,
+            token_program,
+            system_program,
+        ) = setup();
+
+        let program_id = program_id();
+
+        assert_eq!(program_id.to_string(), PROGRAM_ID);
+
+        let transaction = build_init_transaction(
+            &svm,
+            &payer,
+            mint,
+            vault,
+            program_id,
+            token_program,
+            system_program,
+            associated_token_program,
+        );
 
         let tx = svm
             .send_transaction(transaction)
             .expect("Failed to send init tx");
 
         msg!("\n\n Init transaction sucessfull");
+        msg!("Logs: {}", tx.pretty_logs());
+        msg!("CUs Consumed: {}", tx.compute_units_consumed);
+    }
+
+    #[test]
+    pub fn test_contribute_instruction() {
+        let (
+            mut svm,
+            payer,
+            mint,
+            contributor_ata,
+            fundraiser,
+            vault,
+            associated_token_program,
+            token_program,
+            system_program,
+        ) = setup();
+
+        let program_id = program_id();
+        let amount: u64 = 1_000_000; // just enough
+
+        let transaction1 = build_init_transaction(
+            &svm,
+            &payer,
+            mint,
+            vault,
+            program_id,
+            token_program,
+            system_program,
+            associated_token_program,
+        );
+
+        let _tx = svm
+            .send_transaction(transaction1)
+            .expect("Failed to send init tx");
+
+        let transaction = build_contribute_transaction(
+            &mut svm,
+            &payer,
+            amount,
+            mint,
+            contributor_ata,
+            fundraiser,
+            vault,
+            program_id,
+            token_program,
+            system_program,
+            associated_token_program,
+        );
+
+        let tx = svm
+            .send_transaction(transaction)
+            .expect("Failed to send contribute tx");
+
+        msg!("\n\n Contribute transaction sucessfull");
         msg!("Logs: {}", tx.pretty_logs());
         msg!("CUs Consumed: {}", tx.compute_units_consumed);
     }

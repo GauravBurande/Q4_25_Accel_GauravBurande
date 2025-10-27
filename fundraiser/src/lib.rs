@@ -21,11 +21,12 @@ pub fn process_instruction(
 
     let (discriminator, data) = instruction_data
         .split_first()
-        .ok_or(pinocchio::program_error::ProgramError::InvalidAccountData)?;
+        .ok_or(pinocchio::program_error::ProgramError::InvalidInstructionData)?;
 
     match FundInstructions::try_from(discriminator)? {
         FundInstructions::Initialize => instructions::process_initialize(accounts, data)?,
-        _ => return Err(pinocchio::program_error::ProgramError::InvalidAccountData),
+        FundInstructions::Contribute => instructions::process_contribute(accounts, data)?,
+        _ => return Err(pinocchio::program_error::ProgramError::InvalidInstructionData),
     }
     Ok(())
 }
