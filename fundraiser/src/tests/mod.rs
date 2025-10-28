@@ -590,10 +590,9 @@ mod tests {
 
         // time trave 2 days into future, duration is 1 day
 
-        let clock = svm.get_sysvar::<Clock>();
-        let mut rn = clock.unix_timestamp as u64;
-        let days_later = rn + 2 * SECONDS_TO_DAYS;
-        svm.set_sysvar::<Clock>(&days_later);
+        let mut clock = svm.get_sysvar::<Clock>();
+        clock.unix_timestamp += 2 * SECONDS_TO_DAYS as i64;
+        svm.set_sysvar::<Clock>(&clock);
 
         let tx = svm
             .send_transaction(transaction)
