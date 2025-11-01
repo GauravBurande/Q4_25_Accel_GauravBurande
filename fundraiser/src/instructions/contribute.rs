@@ -87,7 +87,8 @@ pub fn process_contribute(accounts: &[AccountInfo], data: &[u8]) -> ProgramResul
         return Err(pinocchio::program_error::ProgramError::IllegalOwner);
     }
 
-    let contributor_state = Contributor::from_account_info(contributor_pda)?;
+    let mut contributor_data = contributor_pda.try_borrow_mut_data()?;
+    let contributor_state = bytemuck::from_bytes_mut::<Contributor>(&mut contributor_data);
 
     if (contributor_state.amount()
         >= (fundraiser_state.amount_to_raise() * MAX_CONTRIBUTION_PERCENTAGE) / PERCENTAGE_SCALER)
