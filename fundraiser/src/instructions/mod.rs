@@ -1,4 +1,4 @@
-use pinocchio::program_error::ProgramError;
+use pinocchio::{account_info::AccountInfo, program_error::ProgramError, ProgramResult};
 
 pub mod collect;
 pub mod contribute;
@@ -8,6 +8,7 @@ pub mod refund;
 pub use collect::*;
 pub use contribute::*;
 pub use initialize::*;
+use pinocchio_token::state::TokenAccount;
 pub use refund::*;
 
 pub enum FundInstructions {
@@ -29,4 +30,16 @@ impl TryFrom<&u8> for FundInstructions {
             _ => Err(ProgramError::InvalidInstructionData),
         }
     }
+}
+
+pub fn validate_ata(ata: &AccountInfo, mint: &AccountInfo, owner: &AccountInfo) -> ProgramResult {
+    let ata_state = TokenAccount::from_account_info(ata)?;
+    if mint.key() != ata_state.mint() {
+        return Err(pinocchio::program_error::ProgramError::InvalidAccountData);
+    }
+    if ata_state.owner() != owner.key() {
+        return Err(pinocchio::program_error::ProgramError::InvalidAccountData);
+    }
+
+    Ok(())
 }

@@ -4,12 +4,9 @@ use pinocchio::{
     sysvars::{clock::Clock, Sysvar},
     ProgramResult,
 };
-use pinocchio_token::{instructions::Transfer, state::TokenAccount};
+use pinocchio_token::instructions::Transfer;
 
-use crate::{
-    constant::SECONDS_TO_DAYS,
-    state::{fundraiser, Fundraiser},
-};
+use crate::{constant::SECONDS_TO_DAYS, instructions::validate_ata, state::Fundraiser};
 
 pub fn process_collect(accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
     let [maker, maker_ata, mint, fundraiser, vault, _system_program, _token_program, _associated_token_program @ ..] =
@@ -22,31 +19,15 @@ pub fn process_collect(accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
         return Err(pinocchio::program_error::ProgramError::MissingRequiredSignature);
     }
 
-    {
-        let maker_ata_state = TokenAccount::from_account_info(maker_ata)?;
-        if mint.key() != maker_ata_state.mint() {
-            return Err(pinocchio::program_error::ProgramError::InvalidAccountData);
-        }
-        if maker_ata_state.owner() != maker.key() {
-            return Err(pinocchio::program_error::ProgramError::InvalidAccountData);
-        }
-    }
+    validate_ata(maker_ata, mint, maker)?;
+    validate_ata(vault, mint, fundraiser)?;
 
-    let fundraiser_state = Fundraiser::from_account_info(fundraiser)?;
+    let fundraiser_data = fundraiser.try_borrow_data()?;
+    let fundraiser_state = bytemuck::pod_read_unaligned::<Fundraiser>(&fundraiser_data);
 
-    {
-        let vault_state = TokenAccount::from_account_info(vault)?;
-        if mint.key() != vault_state.mint() {
-            return Err(pinocchio::program_error::ProgramError::InvalidAccountData);
-        }
-        if vault_state.owner() != fundraiser.key() {
-            return Err(pinocchio::program_error::ProgramError::InvalidAccountData);
-        }
-
-        // check if target amount is met or more
-        if vault_state.amount() < fundraiser_state.amount_to_raise() {
-            return Err(pinocchio::program_error::ProgramError::InvalidArgument);
-        }
+    // check if target amount is met or more
+    if fundraiser_state.current_amount() < fundraiser_state.amount_to_raise() {
+        return Err(pinocchio::program_error::ProgramError::InvalidArgument);
     }
     // check if duration passed
     let current_time = Clock::get()?.unix_timestamp as u64;

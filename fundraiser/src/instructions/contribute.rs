@@ -5,13 +5,11 @@ use pinocchio::{
     ProgramResult,
 };
 use pinocchio_system::instructions::CreateAccount;
-use pinocchio_token::{
-    instructions::Transfer,
-    state::{Mint, TokenAccount},
-};
+use pinocchio_token::{instructions::Transfer, state::Mint};
 
 use crate::{
     constant::{MAX_CONTRIBUTION_PERCENTAGE, PERCENTAGE_SCALER, SECONDS_TO_DAYS},
+    instructions::validate_ata,
     state::{Contributor, Fundraiser},
 };
 
@@ -27,7 +25,8 @@ pub fn process_contribute(accounts: &[AccountInfo], data: &[u8]) -> ProgramResul
         return Err(pinocchio::program_error::ProgramError::MissingRequiredSignature);
     }
 
-    let fundraiser_state = Fundraiser::from_account_info(fundraiser)?;
+    let mut fundraiser_data = fundraiser.try_borrow_mut_data()?;
+    let fundraiser_state = bytemuck::from_bytes_mut::<Fundraiser>(&mut fundraiser_data);
     if fundraiser_state.mint_to_raise.is_empty() {
         return Err(pinocchio::program_error::ProgramError::InvalidAccountData);
     }
@@ -41,25 +40,8 @@ pub fn process_contribute(accounts: &[AccountInfo], data: &[u8]) -> ProgramResul
 
     Contributor::validate_pda(bump, &contributor_pda.key(), &contributor.key())?;
 
-    {
-        let contributor_ata_state = TokenAccount::from_account_info(contributor_ata)?;
-        if mint.key() != contributor_ata_state.mint() {
-            return Err(pinocchio::program_error::ProgramError::InvalidAccountData);
-        }
-        if contributor_ata_state.owner() != contributor.key() {
-            return Err(pinocchio::program_error::ProgramError::InvalidAccountData);
-        }
-    }
-
-    {
-        let vault_state = TokenAccount::from_account_info(vault)?;
-        if mint.key() != vault_state.mint() {
-            return Err(pinocchio::program_error::ProgramError::InvalidAccountData);
-        }
-        if vault_state.owner() != fundraiser.key() {
-            return Err(pinocchio::program_error::ProgramError::InvalidAccountData);
-        }
-    }
+    validate_ata(contributor_ata, mint, contributor)?;
+    validate_ata(vault, mint, fundraiser)?;
 
     let mint_state = Mint::from_account_info(mint)?;
 

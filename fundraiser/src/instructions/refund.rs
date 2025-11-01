@@ -4,12 +4,12 @@ use pinocchio::{
     pubkey::Pubkey,
     ProgramResult,
 };
-use pinocchio_token::{
-    instructions::{CloseAccount, Transfer},
-    state::TokenAccount,
-};
+use pinocchio_token::instructions::Transfer;
 
-use crate::state::{Contributor, Fundraiser};
+use crate::{
+    instructions::validate_ata,
+    state::{Contributor, Fundraiser},
+};
 
 pub fn process_refund(accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
     let [contributor, contributor_ata, contributor_pda, mint, fundraiser, vault, _system_program, _token_program, _associated_token_program @ ..] =
@@ -22,8 +22,10 @@ pub fn process_refund(accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
         return Err(pinocchio::program_error::ProgramError::MissingRequiredSignature);
     }
 
-    let fundraiser_state = Fundraiser::from_account_info(fundraiser)?;
-    let contributor_state = Contributor::from_account_info(contributor_pda)?;
+    let fundraiser_data = fundraiser.try_borrow_data()?;
+    let fundraiser_state = bytemuck::try_pod_read_unaligned::<Fundraiser>(&fundraiser_data)
+        .expect("Invalid fundraiser data");
+
     if fundraiser_state.mint_to_raise.is_empty() {
         return Err(pinocchio::program_error::ProgramError::InvalidAccountData);
     }
@@ -37,25 +39,8 @@ pub fn process_refund(accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
 
     Contributor::validate_pda(bump, &contributor_pda.key(), &contributor.key())?;
 
-    {
-        let contributor_ata_state = TokenAccount::from_account_info(contributor_ata)?;
-        if mint.key() != contributor_ata_state.mint() {
-            return Err(pinocchio::program_error::ProgramError::InvalidAccountData);
-        }
-        if contributor_ata_state.owner() != contributor.key() {
-            return Err(pinocchio::program_error::ProgramError::InvalidAccountData);
-        }
-    }
-
-    {
-        let vault_state = TokenAccount::from_account_info(vault)?;
-        if mint.key() != vault_state.mint() {
-            return Err(pinocchio::program_error::ProgramError::InvalidAccountData);
-        }
-        if vault_state.owner() != fundraiser.key() {
-            return Err(pinocchio::program_error::ProgramError::InvalidAccountData);
-        }
-    }
+    validate_ata(contributor_ata, mint, contributor)?;
+    validate_ata(vault, mint, fundraiser)?;
 
     // refund the contributor
     let maker: Pubkey = fundraiser_state.maker();
@@ -68,13 +53,19 @@ pub fn process_refund(accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
 
     let seeds = Signer::from(&seed);
 
-    Transfer {
-        from: vault,
-        to: contributor_ata,
-        amount: contributor_state.amount(),
-        authority: fundraiser,
+    {
+        let contributor_data = contributor_pda.try_borrow_data()?;
+        let contributor_state = bytemuck::try_pod_read_unaligned::<Contributor>(&contributor_data)
+            .expect("Invalid contributor data");
+
+        Transfer {
+            from: vault,
+            to: contributor_ata,
+            amount: contributor_state.amount(),
+            authority: fundraiser,
+        }
+        .invoke_signed(&[seeds])?;
     }
-    .invoke_signed(&[seeds])?;
 
     // close the contributor pda
     let lamports = contributor_pda.lamports();

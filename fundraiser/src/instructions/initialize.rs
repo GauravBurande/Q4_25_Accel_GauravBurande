@@ -53,7 +53,9 @@ pub fn process_initialize(accounts: &[AccountInfo], data: &[u8]) -> ProgramResul
         .invoke_signed(&[seeds])?;
 
         {
-            let fundraiser_state = Fundraiser::from_account_info(fundraiser)?;
+            let mut account_data = fundraiser.try_borrow_mut_data()?;
+            let fundraiser_state = bytemuck::try_from_bytes_mut::<Fundraiser>(&mut account_data)
+                .map_err(|_| pinocchio::program_error::ProgramError::InvalidInstructionData)?;
 
             fundraiser_state.set_maker(maker.key());
             fundraiser_state.set_mint_to_raise(mint.key());
