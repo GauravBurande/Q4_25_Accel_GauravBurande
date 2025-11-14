@@ -1,7 +1,3 @@
-Here’s a **clean, production-ready README.md** for your repo based on the full context you shared — including onchain Anchor code, Switchboard On-Demand feed creation, job simulation, and feed consumption.
-
----
-
 # 📡 Switchboard On-Demand Price Feed — Solana + Anchor Example
 
 This repository demonstrates **how to create and consume a Switchboard On-Demand Pull Feed** for real-time pricing on Solana.
@@ -152,14 +148,14 @@ const ix = await pullFeed.initIx({
 ### 1️⃣ Install Dependencies
 
 ```
+cd scripts
 bun install
-anchor build
-anchor deploy (on Devnet)
 ```
 
 ### 2️⃣ Create the feed (Devnet)
 
 ```
+cd scripts
 bun feed
 ```
 
@@ -173,6 +169,9 @@ This will:
 ### 3️⃣ Call the Anchor test instruction
 
 ```
+cd ../feed_onchain
+anchor build
+anchor deploy (on Devnet)
 anchor test --skip-build --skip-local-validator --skip-deploy
 ```
 
