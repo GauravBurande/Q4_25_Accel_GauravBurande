@@ -21,7 +21,7 @@ pub mod feed_onchain {
         // let clock_slot = Clock::get()?.slot;
         msg!(
             "Umbra Price: {:?}",
-            feed.get_value(slot, 10000000000, 1, true).unwrap()
+            feed.get_value(slot, 100, 1, true).unwrap()
         );
         Ok(())
     }
