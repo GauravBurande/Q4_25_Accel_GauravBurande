@@ -18,11 +18,9 @@ pub mod feed_onchain {
 
         let feed = PullFeedAccountData::parse(feed_account).unwrap();
 
-        // let clock_slot = Clock::get()?.slot;
-        msg!(
-            "Umbra Price: {:?}",
-            feed.get_value(slot, 100, 1, true).unwrap()
-        );
+        // let slot = Clock::get()?.slot;
+        let price = feed.get_value(slot, 100, 1, false).unwrap();
+        msg!("Umbra Price: {:?}", price);
         Ok(())
     }
 }
