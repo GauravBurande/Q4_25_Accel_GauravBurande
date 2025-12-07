@@ -1,4 +1,4 @@
-# 📡 Switchboard On-Demand Price Feed — Solana + Anchor Example
+# Switchboard On-Demand Price Feed — Solana + Anchor Example
 
 This repository demonstrates **how to create and consume a Switchboard On-Demand Pull Feed** for real-time pricing on Solana.
 It includes:
@@ -10,7 +10,7 @@ It includes:
 
 ---
 
-## ✨ Features
+## Features
 
 - ✔️ Creates On-Demand feeds using `@switchboard-xyz/on-demand`
 - ✔️ Uses **JupiterSwapTask** to fetch token swap quotes
@@ -36,7 +36,7 @@ It includes:
 
 ---
 
-# 🧩 onchain Program (Anchor)
+# onchain Program (Anchor)
 
 This Anchor instruction shows how to:
 
@@ -76,7 +76,7 @@ pub mod feed_onchain {
 
 ---
 
-# 🛰️ Off-Chain Script: Creating a Switchboard On-Demand Feed
+# Off-Chain Script: Creating a Switchboard On-Demand Feed
 
 Your feed uses **Jupiter SwapTask**:
 
@@ -110,7 +110,7 @@ const jobs: OracleJob[] = [
 ];
 ```
 
-## 🧪 Run Simulation
+## Run Simulation
 
 ```ts
 const response = await fetch("https://api.switchboard.xyz/api/simulate", {
@@ -123,7 +123,7 @@ const response = await fetch("https://api.switchboard.xyz/api/simulate", {
 });
 ```
 
-## 🏗️ Initialize the Feed
+## Initialize the Feed
 
 ```ts
 const [pullFeed, feedKeypair] = PullFeed.generate(queue.program);
@@ -143,7 +143,7 @@ const ix = await pullFeed.initIx({
 
 ---
 
-# 🚀 Usage
+# Usage
 
 ### 1️⃣ Install Dependencies
 
