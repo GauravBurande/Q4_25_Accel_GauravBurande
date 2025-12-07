@@ -26,3 +26,4 @@ pub mod feed_onchain {
 }
 
 // TODO: solve NotEnoughSamples issue
+// to solve above, u have to crank feed as many times as min_samples from https://beta.ondemand.switchboard.xyz/solana/devnet

@@ -6,7 +6,7 @@ use solana_gpt_oracle::cpi::{
 };
 use solana_gpt_oracle::{ContextAccount, Counter, Identity};
 
-declare_id!("FMCBSyWV6apm9XjL5oc3rSnyQLtgb38TCVUuxpHdaxvQ");
+declare_id!("5gYsmrbhiPH91wYzq7zpSjjEBMNYQrpij1FEfpoERQzQ");
 
 #[program]
 pub mod magicblock_solana_ai_oracle {
@@ -78,7 +78,7 @@ pub mod magicblock_solana_ai_oracle {
         msg!("AI response received: {}", response);
 
         // Parse the response as u8
-        let parsed_score: u8 = response.trim().parse().map_err(|_| {
+        let parsed_score: u8 = response.trim().parse::<u8>().map_err(|_| {
             msg!("Failed to parse AI response as a number");
             ProgramError::InvalidInstructionData
         })?;
